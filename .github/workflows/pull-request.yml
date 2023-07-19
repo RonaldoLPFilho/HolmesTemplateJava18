@@ -1,0 +1,35 @@
+name: Pull request
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  run-tests:
+    runs-on: [self-hosted, restricted]
+    continue-on-error: false
+
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v3.0.2
+
+      - name: Link Actions
+        run: ln -s /home/despegar/app/actions ./.github/actions
+
+      - name: Setup Java
+        uses: ./.github/actions/setup-java
+        with:
+          version: 17
+
+      - name: Print Java version
+        run: java -version
+
+      - name: Print Maven version
+        run: mvn -version
+
+      - name: Compile
+        run: mvn clean --batch-mode compile
+
+      - name: Test
+        run: mvn --batch-mode test

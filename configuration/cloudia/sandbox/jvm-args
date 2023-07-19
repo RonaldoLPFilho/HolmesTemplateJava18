@@ -1,0 +1,39 @@
+# lines starting with # are comments
+# parsed with  grep -vE "^\s*#" jvm-args | tr '\n' ' '
+
+# Greenwich Mean Time to avoid summertime changes
+-Duser.timezone=GMT-0
+
+# new relic settings
+-javaagent:/home/despegar/app/newrelic/newrelic.jar
+-Dnewrelic.config.file=/home/despegar/app/config/newrelic.yml
+-Dnewrelic.enable.java.17
+
+# memory settings
+-Xms1024m
+-Xmx1024m
+-XX:MetaspaceSize=128M
+-XX:MaxMetaspaceSize=256M
+-XX:+AlwaysPreTouch
+
+# garbage collector settings
+-XX:+UseG1GC
+-Xlog:gc*,safepoint:/home/despegar/shares/logs/garbageCollector.log::filecount=5,filesize=100M
+
+# always show stack trace
+-XX:-OmitStackTraceInFastThrow
+
+# heap dump settings
+-XX:+HeapDumpOnOutOfMemoryError
+-XX:HeapDumpPath=/home/despegar/shares/dumps
+
+# refresh dns cache (helps when database or any external connection fallbacks to a different host)
+-Dnetworkaddress.cache.ttl=60
+
+# faster non blocking random number generator
+-Djava.security.egd=file:/dev/./urandom
+
+# Métricas JVM / JMX en Prominfra (ex-Munin)
+-Dcom.sun.management.jmxremote.port=29290
+-Dcom.sun.management.jmxremote.ssl=false
+-Dcom.sun.management.jmxremote.authenticate=false

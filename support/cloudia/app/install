@@ -1,0 +1,48 @@
+#!/bin/bash -x
+
+echo "Use java 17..."
+sudo /usr/local/bin/update-java-version.sh java17amz
+java-switch.sh java17amz
+
+echo "Update tz data..."
+sudo /usr/local/scripts/ziupdater-latest.sh
+
+context=`cat /etc/cluster.context`
+echo "Context defined in cluster.context: $context"
+region=`cat /etc/cluster.info |python -c "import json,sys;input=json.load(sys.stdin);print (input.get('instanceInfo').get('region'))"`
+echo "Region defined in cluster.info: $region"
+
+app_home=`dirname $0`
+
+echo "Selecting configuration by environment context"
+cp ${app_home}/config/${context}/* ${app_home}/config
+
+echo "Generating log folder..."
+mkdir -p /home/despegar/shares/logs
+
+echo "Generating dumps folder..."
+mkdir -p /home/despegar/shares/dumps
+
+# Enable Jemalloc for better native memory managment in apps with static threadpools
+# https://discourse.despegar.com/t/problemas-de-memoria-off-heap-aca-puede-estar-tu-solucion/2112/2
+lib_arch_path=$(dpkg-architecture -qDEB_HOST_MULTIARCH)
+if [ ! -f "/usr/lib/${lib_arch_path}/libjemalloc.so" ]; then
+      echo "Installing jemalloc lib"
+      sudo /usr/local/scripts/install-jemalloc.sh
+fi
+
+echo "Notifying deployment to newRelic..."
+newrelic_config_file=${app_home}/config/newrelic.yml
+if [ -f $newrelic_config_file ]; then
+    host=`hostname`
+    version=`cat ${app_home}/version`
+    appName=`grep app_name: $newrelic_config_file | egrep -v '.*#' | cut -d":" -f 2| sed "s/^ *\(.*\) *$/\1/"`
+    licenseKey=`grep license_key: $newrelic_config_file | egrep -v '.*#' | cut -d":" -f 2| sed -e "s/'//g" -e "s/ //g"`
+
+    if [ -n "$appName" ] && [ -n "$licenseKey" ]; then
+      echo curl -s -w "newrelic record deploy response status code: %{http_code}" -H "x-license-key:${licenseKey}" -d "deployment[app_name]=${appName}" -d "deployment[revision]=${host}:${version}" -d "deployment[host]=${host}" -d "deployment[user]=clouddeploy"  https://api.newrelic.com/deployments.xml -o /dev/null
+      curl -s -w "newrelic record deploy response status code: %{http_code}" -H "x-license-key:${licenseKey}" -d "deployment[app_name]=${appName}" -d "deployment[revision]=${host}:${version}" -d "deployment[host]=${host}" -d "deployment[user]=clouddeploy" https://api.newrelic.com/deployments.xml -o /dev/null
+    fi
+else
+    echo "skip send newrelic deployment info, $newrelic_config_file file not found"
+fi

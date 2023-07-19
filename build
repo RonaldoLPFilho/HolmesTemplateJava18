@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+set -x
+
+# Avoid error: "tar: Failed to set default locale"
+export LANG=en_US.UTF-8
+export LC_ALL=$LANG
+
+JAVA_VERSION=$(java -version 2>&1 >/dev/null | grep ' version' | awk '{print $3}' | sed 's/"//g' | cut -d"." -f1)
+
+if [ "${JAVA_VERSION}" != "18" ]; then
+  echo "Use java 18..."
+  sudo /usr/local/bin/update-java-version.sh java17amz
+  java-switch.sh java17amz
+fi
+
+VERSION=$1
+PROJECT_ROOT="$(dirname "$0")"
+ARTIFACT_ID=$(mvn -f "${PROJECT_ROOT}"/pom.xml -q \
+    -Dexec.executable=echo \
+    -Dexec.args='${project.artifactId}' \
+    --non-recursive \
+    exec:exec)
+
+TAR_NAME="${ARTIFACT_ID}"-"${VERSION}".tar
+
+echo "Building ${TAR_NAME}..."
+mvn -f "${PROJECT_ROOT}"/pom.xml clean package -U -Dmaven.test.skip=true
+
+echo "Creating environments configurations..."
+mkdir -p ${PROJECT_ROOT}/target/app/config/prod
+mkdir -p ${PROJECT_ROOT}/target/app/config/beta
+mkdir -p ${PROJECT_ROOT}/target/app/config/sandbox
+mkdir -p ${PROJECT_ROOT}/target/app/config/rc
+mkdir -p ${PROJECT_ROOT}/target/app/newrelic
+
+echo "Preaparing .tar content..."
+cp -r ${PROJECT_ROOT}/support/cloudia/app ${PROJECT_ROOT}/target
+cp -r ${PROJECT_ROOT}/target/dependency/newrelic.jar ${PROJECT_ROOT}/target/app/newrelic/newrelic.jar
+cp -r ${PROJECT_ROOT}/configuration/cloudia/prod/* ${PROJECT_ROOT}/target/app/config/prod
+cp -r ${PROJECT_ROOT}/configuration/cloudia/beta/* ${PROJECT_ROOT}/target/app/config/beta
+cp -r ${PROJECT_ROOT}/configuration/cloudia/sandbox/* ${PROJECT_ROOT}/target/app/config/sandbox
+cp -r ${PROJECT_ROOT}/configuration/cloudia/rc/* ${PROJECT_ROOT}/target/app/config/rc
+mv ${PROJECT_ROOT}/target/${ARTIFACT_ID}.jar ${PROJECT_ROOT}/target/app
+echo ${ARTIFACT_ID} > ${PROJECT_ROOT}/target/app/artifactName
+
+echo "Saving version number to use later on install by NewRelic..."
+echo ${VERSION} > ${PROJECT_ROOT}/target/app/version
+
+echo "Generating .tar..."
+tar -cvf ${PROJECT_ROOT}/target/${TAR_NAME} -C ${PROJECT_ROOT}/target app

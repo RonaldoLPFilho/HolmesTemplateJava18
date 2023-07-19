@@ -1,0 +1,33 @@
+#!/bin/bash
+
+app_home=`dirname $0`
+
+ARTIFACT_ID=`cat ${app_home}/artifactName`
+JAR_NAME=`echo ${ARTIFACT_ID}.jar`
+
+pid=`ps -fea | grep ${JAR_NAME} | grep -v grep | awk '{print $2}'`
+
+if [ -z $pid ]; then
+    echo "The application is not running"
+    exit 0
+fi
+
+kill ${pid}
+
+echo "Waiting for application to stop..."
+{
+  SERVICE_UP=5
+  while [ ${SERVICE_UP} -ge 0 ]; do
+    sleep 3
+    if [ $(curl -s -o /dev/null -w "%{http_code}" http://localhost:9290/health-check | grep 200) ]; then
+      echo "Application is up: [$((SERVICE_UP * 3))] seconds remaining."
+    else
+      echo "Application is down"
+      exit 0
+    fi
+	SERVICE_UP=$((SERVICE_UP - 1))
+  done
+}
+
+echo "Force stopping application"
+kill -9 ${pid}

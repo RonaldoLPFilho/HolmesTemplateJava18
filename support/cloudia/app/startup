@@ -1,0 +1,61 @@
+#!/bin/bash
+
+app_home=`dirname $0`
+
+ARTIFACT_ID=`cat ${app_home}/artifactName`
+JAR_NAME=`echo ${ARTIFACT_ID}.jar`
+SHARES_PATH="/home/despegar/shares"
+
+pid=`ps -fea | grep ${JAR_NAME} | grep -v grep | awk '{print $2}'`
+
+if [ ! -z $pid ]; then
+    echo "The application is running with pid ${pid}"
+    exit 0
+fi
+
+resolve_overridable_file_path() {
+  local file=$1
+  local override_file_path="${SHARES_PATH}/override/${file}"
+
+  if [ -f "${override_file_path}" ]; then
+      echo "$override_file_path"
+  else
+      echo "${app_home}/config/${file}"
+  fi
+}
+
+# Enable Jemalloc for better native memory managment in apps with static threadpools
+# https://discourse.despegar.com/t/problemas-de-memoria-off-heap-aca-puede-estar-tu-solucion/2112/2
+# libjemalloc.so.2 is available for Ubuntu verions grater than 20, if you need deploy in Ubuntu 18.04 please use libjemalloc.so.1 
+lib_arch_path=$(dpkg-architecture -qDEB_HOST_MULTIARCH)
+if [ ! -f "/usr/lib/${lib_arch_path}/libjemalloc.so" ]; then
+      echo "Jemalloc lib is missing, please exec install script."
+      exit 1
+fi
+export LD_PRELOAD="/usr/lib/${lib_arch_path}/libjemalloc.so"
+
+jvm_args_path=$(resolve_overridable_file_path "jvm-args")
+log_config_path=$(resolve_overridable_file_path "logback.xml")
+
+JVM_ARGS=$(grep -vE "^\s*#" "$jvm_args_path" | tr '\n' ' ')
+
+nohup java $JVM_ARGS -Dlogging.config=$log_config_path -jar ${app_home}/${JAR_NAME}  > "$SHARES_PATH"/logs/startup.log 2>&1 &
+
+echo "Waiting for application to start..."
+{
+  SERVICE_UP=40
+  while [ ${SERVICE_UP} -ge 0 ]; do
+    sleep 5
+    if [ $(curl -s -o /dev/null -w "%{http_code}" http://localhost:9290/health-check | grep 200) ]; then
+      echo "Service is up"
+      echo "Startup finished"
+      exit 0
+	else
+      echo "Server is not up: [$((SERVICE_UP * 5))] seconds remaining."
+	fi
+	SERVICE_UP=$((SERVICE_UP - 1))
+  done
+}
+
+echo "Startup failed"
+exit 1

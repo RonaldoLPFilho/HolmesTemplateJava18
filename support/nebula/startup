@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Enable Jemalloc for better native memory managment in apps with static threadpools
+# https://discourse.despegar.com/t/problemas-de-memoria-off-heap-aca-puede-estar-tu-solucion/2112/2
+lib_arch_path=$(dpkg-architecture -qDEB_HOST_MULTIARCH)
+if [ ! -f "/usr/lib/${lib_arch_path}/libjemalloc.so" ]; then
+      echo "Jemalloc lib is missing, please exec install script."
+      exit 1
+fi
+export LD_PRELOAD="/usr/lib/${lib_arch_path}/libjemalloc.so"
+
+JVM_ARGS=$(grep -vE "^\s*#" /service/config/jvm-args | tr '\n' ' ')
+
+echo $JVM_ARGS
+
+java $JVM_ARGS -jar java-template.jar
