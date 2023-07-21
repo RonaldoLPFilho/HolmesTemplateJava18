@@ -5,11 +5,13 @@
 # 1. Descargar dependencias
 # 2. Compilar
 # 3. Buildear el jar
-FROM hub.nebula/maven:jdk17_0.0.5 AS build
+FROM maven:3.8.3-openjdk-17 AS build
 
 # Copiamos el pom para exclusivamente descargar las dependencias y que pueda guardase este layer en la cache. [cache-layers]: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#leverage-build-cache
 # HELP: COPY <archivo_de_nuestro_directorio> <destino_dentro_de_la_imagen_*build*>
 COPY pom.xml /app/pom.xml
+
+#COPY /home/ronaldo/.m2 /root/.m2
 
 # Con el comando WORKDIR cambiamos de directorio
 # HELP: WORKDIR <nuevo_directorio_de_trabajo>
@@ -36,7 +38,7 @@ RUN curl "https://cdn.azul.com/tools/ziupdater1.1.1.1-jse8+7-any_jvm.tar.gz" --o
 # 1. Imagen de base liviana.
 # 2. Instalar herramientas para troubleshooting.
 # 3. Copiar de la imagen de *build* los archivos necesarios para ejecutar correctamente la aplicacion
-FROM hub.nebula/java-17-corretto:0.0.6 AS final
+FROM openjdk:18.0.2  AS final
 
 WORKDIR /tmp
 # Traemos los archivos descargados en la imagen anterior.
